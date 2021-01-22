@@ -31,15 +31,19 @@ $('document').ready(function(){
         let cellObj = db[rowId][colId];   // access the empty obj
 
         console.log(formula)
+        if(cellObj.formula != formula){             // prev val of cell may have been a 1. val 2. formula 
+            removeFormula(cellObj);               // if it was formula based earlier(A1+A2) n formula has been updated now eg A1+10. delete all teh info related to f1
+            let value = solveFormula(formula , cellObj);   // 1. compute   eg A1 +A2
 
-        let value = solveFormula(formula , cellObj);   // 1. compute   eg A1 +A2
+            cellObj.value = value;      // 2. update db
+            cellObj.formula = formula; 
+            console.log("value "+value); 
 
-      
-        cellObj.value = value;      // 2. update db
-        cellObj.formula = formula; 
-        console.log("value "+value); 
+            $(lsc).text(value);  // 3.update ui
 
-        $(lsc).text(value);  // 3.update ui
+            updateChildren(cellObj);  // since the cell has transition from being a value to formula based, its children need to be updated
+        }
+        
     })
     
 
@@ -54,7 +58,7 @@ $('document').ready(function(){
 
 
          if(cellName>= 'A' && cellName<='Z'){
-             
+
             let { rowId , colId } = getRowIdColId(fComp);//fcomp -> A1
             let parentCellObject = db[rowId][colId]; // 1.parentObj is obtained from the formula { name : "A1" , value :10 , formula : "" , children : [] , parents: [] }
 
@@ -97,31 +101,57 @@ $('document').ready(function(){
         lsc = this;
         console.log(this); //OP -> <div class="cell" contenteditable="true" rid="0" cid="5">300</div>
         let value = $(this).text(); // getValue eg 100   text(), for div. val() for input 
-        console.log("value that uveentered: "+ value);
+        
         let rowId = Number($(this).attr('rid')); 
         let colId = Number($(this).attr('cid'));  
         let cellObject = db[rowId][colId]; 
 
-        if(cellObject.value != value){
-            
-            // suppose the db consists of A1 = 10 A2 = 20 B1 = (A1+A2) //20. 
+        if(cellObject.value != value){   // update only when the value changes 
 
-            //Now I'd like to change the value of A1. -> Subsequently B1 must be updated too
-            console.log("will update now ")
-            //update db
-            cellObject.value = value;   
+            //  suppose the db consists of A1 = 10 A2 = 20 B1 = (A1+A2) //20. 
 
+            //  Now I'd like to change the value of A1. -> Subsequently B1 must be updated too since A1 is the parent of B1
+    
+            //  Update db
+            cellObject.value = value;// the new value may have been 1.value 2.formula based. if val-> wont have parents just update children else
+
+            if(cellObject.formula){   // FORMULA BASED if the cell in which uve entered a val was formula based before
+                $('#formula').val("");
+                removeFormula(cellObject)
+            }
             updateChildren(cellObject);    // cellObject refers to A1 
             console.log(cellObject);
 
-             
-
-            // update UI  (accessing el by a cell's attr ie rid cid)
+             // update UI  (accessing el by a cell's attr ie rid cid)
             $(`.cell[rid = ${rowId} ][cid = ${colId}]`).text(value); 
         }
         
      })
-    
+
+
+    function removeFormula(cellObject){
+        // 1.i already updated value 
+
+        //2. set formula to null
+        cellObject.formula =""; 
+        
+        //3. remove urself from parents 's children arr
+        for(let i =0;i<cellObject.parents.length ; i++){
+            let parentName = cellObject.parents[i]; 
+            let { rowId , colId } = getRowIdColId(parentName);
+            let parentCellObject = db[rowId][colId]; 
+            
+            let filteredChildren = parentCellObject.children.filter( function(child){ // every child is teh el belonging to children arr eg A1 B1 C1
+                return child != cellObject.name
+            })
+            parentCellObject.children = filteredChildren;
+        }
+
+        //4. cellobj.parents will point to an empty arr
+        cellObject.parents=[]; 
+    }
+
+
     function updateChildren(cellObject){  // cellObj refers to A1
        /* 
         current cellObject
@@ -154,8 +184,6 @@ $('document').ready(function(){
           updateChildren(childrenCellObjet);      // applying dfs 
 
       }
-
-
     }
 
     function getRowIdColId(address){  // address eg A2 r owId colId 0 1 
@@ -164,7 +192,6 @@ $('document').ready(function(){
       return { rowId :rowId,
                 colId : colId
              }; 
-
     }
 
 
